@@ -18,7 +18,8 @@ if (connectionString) {
 } else {
   dbType = 'sqlite';
   const sqlite3 = require('sqlite3').verbose();
-  const dbPath = path.resolve(__dirname, 'paperplane.sqlite');
+  const isVercel = process.env.VERCEL;
+  const dbPath = isVercel ? path.resolve('/tmp', 'paperplane.sqlite') : path.resolve(__dirname, 'paperplane.sqlite');
   const exists = fs.existsSync(dbPath);
   sqliteDb = new sqlite3.Database(dbPath);
   sqliteDb.run('PRAGMA foreign_keys = ON;');

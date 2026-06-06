@@ -9,7 +9,8 @@ const { authenticateToken, isAgent, isAdmin } = require('../middleware/auth');
 // Multer Setup for Image Uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../uploads');
+    const isVercel = process.env.VERCEL;
+    const uploadDir = isVercel ? path.join('/tmp', 'uploads') : path.join(__dirname, '../uploads');
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }

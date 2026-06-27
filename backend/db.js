@@ -27,11 +27,9 @@ if (connectionString) {
 }
 
 /**
- * Unified SQL query function.
- * Automatically translates Postgres placeholder syntax ($1, $2) to SQLite syntax (?)
- * and returns a standard structure: { rows: Array, rowCount: Number }
+ * Internal raw SQL query function.
  */
-const query = (text, params = []) => {
+const queryInternal = (text, params = []) => {
   return new Promise((resolve, reject) => {
     if (dbType === 'postgres') {
       pgPool.query(text, params, (err, res) => {
@@ -86,11 +84,11 @@ const query = (text, params = []) => {
 /**
  * Initialize database tables using SQL schema file.
  */
-const initDb = async () => {
+const initDbInternal = async () => {
   if (dbType === 'postgres') {
     const schemaPath = path.join(__dirname, 'schema.sql');
     const sql = fs.readFileSync(schemaPath, 'utf8');
-    await query(sql);
+    await queryInternal(sql);
     console.log('PostgreSQL schema initialized.');
   } else {
     const schemaPath = path.join(__dirname, 'schema-sqlite.sql');
@@ -98,6 +96,45 @@ const initDb = async () => {
     sqliteDb.exec(sql);
     console.log('SQLite schema initialized.');
   }
+};
+
+let initPromise = null;
+const ensureDbInitialized = () => {
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        await initDbInternal();
+        // Check if database needs auto-seeding
+        const checkRes = await queryInternal('SELECT COUNT(*) as count FROM delivery_agents');
+        const count = parseInt(checkRes.rows[0].count || 0);
+        if (count === 0) {
+          console.log('Database is empty. Auto-seeding...');
+          const { seed } = require('./seed');
+          await seed(false);
+          console.log('Database auto-seeded successfully.');
+        }
+      } catch (err) {
+        console.error('Failed to auto-initialize/seed database:', err);
+        // Clear promise so it retries on next request if it failed
+        initPromise = null;
+        throw err;
+      }
+    })();
+  }
+  return initPromise;
+};
+
+/**
+ * Unified SQL query function.
+ * Automatically waits for database initialization.
+ */
+const query = async (text, params = []) => {
+  await ensureDbInitialized();
+  return queryInternal(text, params);
+};
+
+const initDb = async () => {
+  await ensureDbInitialized();
 };
 
 module.exports = {

@@ -1,12 +1,8 @@
 {
-  "name": "paperplane-gift-delivery-tracker",
+  "name": "paperplane-root",
   "version": "1.0.0",
-  "description": "Gift Delivery Route & Dispatch Tracker for Paper Plane",
+  "private": true,
   "scripts": {
-    "install-all": "npm.cmd install --prefix backend && npm.cmd install --prefix frontend",
-    "backend": "npm.cmd start --prefix backend",
-    "frontend": "npm.cmd run dev --prefix frontend",
-    "dev": "npx.cmd concurrently \"npm.cmd run dev --prefix backend\" \"npm.cmd run dev --prefix frontend\"",
-    "seed": "npm.cmd run seed --prefix backend"
+    "build": "npm install --prefix frontend && npm run build --prefix frontend"
   }
 }

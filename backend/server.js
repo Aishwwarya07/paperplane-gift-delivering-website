@@ -84,29 +84,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Initialize DB on startup (asynchronous background task)
-initDb()
-  .then(async () => {
-    console.log('Database tables verified/initialized.');
-    try {
-      const { query } = require('./db');
-      const checkRes = await query('SELECT COUNT(*) as count FROM delivery_agents');
-      const count = parseInt(checkRes.rows[0].count || 0);
-      if (count === 0) {
-        console.log('Database is empty. Running auto-seeding...');
-        const { seed } = require('./seed');
-        await seed(false);
-        console.log('Database auto-seeded successfully.');
-      } else {
-        console.log(`Database check passed. Found ${count} delivery agents.`);
-      }
-    } catch (err) {
-      console.error('Failed to run database auto-seed check:', err);
-    }
-  })
-  .catch((error) => {
-    console.error('Failed to initialize database on startup:', error);
-  });
+// Database will be initialized on-demand when the first query runs via db.js
 
 // Start listening only when NOT in a serverless environment (like Vercel)
 if (!process.env.VERCEL) {

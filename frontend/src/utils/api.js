@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.DEV ? '' : '/_/backend';
+const API_BASE = ''; // In dev, Vite proxies /api/* → localhost:5000; in prod, Vercel routes /api/* to backend
 
 export const apiFetch = async (endpoint, options = {}) => {
   const token = localStorage.getItem('token');

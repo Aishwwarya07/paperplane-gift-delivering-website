@@ -99,10 +99,13 @@ const initDbInternal = async () => {
 };
 
 let initPromise = null;
+let isInitializing = false;
+
 const ensureDbInitialized = () => {
   if (!initPromise) {
     initPromise = (async () => {
       try {
+        isInitializing = true;
         await initDbInternal();
         // Check if database needs auto-seeding
         const checkRes = await queryInternal('SELECT COUNT(*) as count FROM delivery_agents');
@@ -115,9 +118,10 @@ const ensureDbInitialized = () => {
         }
       } catch (err) {
         console.error('Failed to auto-initialize/seed database:', err);
-        // Clear promise so it retries on next request if it failed
-        initPromise = null;
+        initPromise = null; // Reset so next query will retry
         throw err;
+      } finally {
+        isInitializing = false;
       }
     })();
   }
@@ -129,7 +133,9 @@ const ensureDbInitialized = () => {
  * Automatically waits for database initialization.
  */
 const query = async (text, params = []) => {
-  await ensureDbInitialized();
+  if (!isInitializing) {
+    await ensureDbInitialized();
+  }
   return queryInternal(text, params);
 };
 

@@ -1,12 +1,17 @@
 const bcrypt = require('bcryptjs');
-const { query, initDb } = require('./db');
 
-const seed = async (clearFirst = true) => {
+const seed = async (clearFirst = true, customQuery = null) => {
+  // Shadow imported query with local variable to resolve deadlock in serverless DB init
+  const query = customQuery || require('./db').query;
+  const { initDb } = require('./db');
+
   try {
     console.log('Starting database seeding...');
 
     // 1. Initialize schema
-    await initDb();
+    if (!customQuery) {
+      await initDb();
+    }
 
     // 2. Clear tables (just in case)
     if (clearFirst) {

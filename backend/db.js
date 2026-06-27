@@ -17,13 +17,13 @@ if (connectionString) {
   console.log('Database connected: PostgreSQL');
 } else {
   dbType = 'sqlite';
-  const sqlite3 = require('sqlite3').verbose();
+  const { Database } = require('node-sqlite3-wasm');
   const isVercel = process.env.VERCEL;
   const dbPath = isVercel ? path.resolve('/tmp', 'paperplane.sqlite') : path.resolve(__dirname, 'paperplane.sqlite');
-  const exists = fs.existsSync(dbPath);
-  sqliteDb = new sqlite3.Database(dbPath);
-  sqliteDb.run('PRAGMA foreign_keys = ON;');
-  console.log(`Database connected: SQLite (${dbPath})`);
+  sqliteDb = new Database(dbPath);
+  sqliteDb.exec('PRAGMA foreign_keys = ON;');
+  sqliteDb.exec('PRAGMA journal_mode = WAL;');
+  console.log(`Database connected: SQLite/WASM (${dbPath})`);
 }
 
 /**
@@ -42,30 +42,42 @@ const query = (text, params = []) => {
         });
       });
     } else {
-      // Translate $1, $2 -> ? for SQLite
-      let sqliteText = text;
-      sqliteText = sqliteText.replace(/\$\d+/g, '?');
+      try {
+        // Translate $1, $2 -> ? for SQLite
+        let sqliteText = text.replace(/\$\d+/g, '?');
+        const lowerText = sqliteText.trim().toLowerCase();
 
-      const lowerText = sqliteText.trim().toLowerCase();
-      // If it returns data, run as db.all, else run as db.run
-      if (lowerText.startsWith('select') || lowerText.includes('returning')) {
-        sqliteDb.all(sqliteText, params, (err, rows) => {
-          if (err) return reject(err);
+        if (lowerText.includes('returning')) {
+          // Strip RETURNING clause and use lastInsertRowid
+          const withoutReturning = sqliteText.replace(/\s+returning\s+\S+/i, '');
+          const stmt = sqliteDb.prepare(withoutReturning);
+          const info = stmt.run(params);
+          stmt.finalize();
+          resolve({
+            rows: [{ id: info.lastInsertRowid }],
+            rowCount: info.changes,
+            lastID: info.lastInsertRowid
+          });
+        } else if (lowerText.startsWith('select')) {
+          const stmt = sqliteDb.prepare(sqliteText);
+          const rows = stmt.all(params);
+          stmt.finalize();
           resolve({
             rows: rows || [],
             rowCount: rows ? rows.length : 0
           });
-        });
-      } else {
-        sqliteDb.run(sqliteText, params, function (err) {
-          if (err) return reject(err);
-          // Standardize insert response for SQLite returning id
+        } else {
+          const stmt = sqliteDb.prepare(sqliteText);
+          const info = stmt.run(params);
+          stmt.finalize();
           resolve({
-            rows: [{ id: this.lastID }],
-            rowCount: this.changes,
-            lastID: this.lastID
+            rows: [{ id: info.lastInsertRowid }],
+            rowCount: info.changes,
+            lastID: info.lastInsertRowid
           });
-        });
+        }
+      } catch (err) {
+        reject(err);
       }
     }
   });
@@ -83,15 +95,7 @@ const initDb = async () => {
   } else {
     const schemaPath = path.join(__dirname, 'schema-sqlite.sql');
     const sql = fs.readFileSync(schemaPath, 'utf8');
-
-    // SQLite node client does not execute multiple statements in one query() easily unless we use db.exec.
-    // So we'll use sqliteDb.exec for initializing schema.
-    await new Promise((resolve, reject) => {
-      sqliteDb.exec(sql, (err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
+    sqliteDb.exec(sql);
     console.log('SQLite schema initialized.');
   }
 };
